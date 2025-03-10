@@ -61,6 +61,8 @@ func run(window *app.Window) error {
 	loadKernelButton := new(widget.Clickable)
 	saveKernelButton := new(widget.Clickable)
 	applyKernelButton := new(widget.Clickable)
+	erosionButton := new(widget.Clickable)
+	dilationButton := new(widget.Clickable)
 	convolutionEditor := NewConvolutionEditor()
 	var errorMessage *string = new(string)
 
@@ -139,6 +141,24 @@ func run(window *app.Window) error {
 						window.Invalidate()
 					}
 				}
+				if erosionButton.Clicked(gtx) {
+					if filteredImage == nil {
+						*errorMessage = "No image loaded"
+					} else {
+						*errorMessage = ""
+						filteredImage.AddFilter(MorphologicalFilter{Size: 3, IsErosion: true})
+						window.Invalidate()
+					}
+				}
+				if dilationButton.Clicked(gtx) {
+					if filteredImage == nil {
+						*errorMessage = "No image loaded"
+					} else {
+						*errorMessage = ""
+						filteredImage.AddFilter(MorphologicalFilter{Size: 3, IsErosion: false})
+						window.Invalidate()
+					}
+				}
 				if resetButton.Clicked(gtx) {
 					if filteredImage == nil {
 						*errorMessage = "No image loaded"
@@ -173,8 +193,12 @@ func run(window *app.Window) error {
 							return
 						}
 						defer file.Close()
-						filter := convolutionEditor.GetFilter()
-						err = SaveConvolutionFilter(filter, file)
+						filter, err := convolutionEditor.GetFilter()
+						if err != nil {
+							*errorMessage = fmt.Sprintf("Failed to save kernel: %v", err)
+							return
+						}
+						err = SaveConvolutionFilter(*filter, file)
 						if err != nil {
 							*errorMessage = fmt.Sprintf("Failed to save kernel: %v", err)
 							return
@@ -221,7 +245,7 @@ func run(window *app.Window) error {
 											} else {
 												img := widget.Image{
 													Src: paint.NewImageOp(filteredImage.OriginalImage),
-													Fit: widget.Contain,
+													Fit: widget.Unscaled,
 												}
 												return img.Layout(gtx)
 											}
@@ -238,7 +262,7 @@ func run(window *app.Window) error {
 											} else {
 												img := widget.Image{
 													Src: paint.NewImageOp(filteredImage.FilteredImage),
-													Fit: widget.Contain,
+													Fit: widget.Unscaled,
 												}
 												return img.Layout(gtx)
 											}
@@ -299,6 +323,20 @@ func run(window *app.Window) error {
 								func(gtx layout.Context) layout.Dimensions {
 									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, gammaButton, "Gamma").Layout(gtx)
+									})
+								},
+							),
+							layout.Rigid(
+								func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return material.Button(theme, erosionButton, "Erosion").Layout(gtx)
+									})
+								},
+							),
+							layout.Rigid(
+								func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return material.Button(theme, dilationButton, "Dilation").Layout(gtx)
 									})
 								},
 							),

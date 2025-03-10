@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -145,8 +146,14 @@ func (ce *ConvolutionEditor) UpdateKernel() string {
 	kernelText := ce.KernelField.Text()
 	rows := strings.Split(kernelText, "\n")
 	ce.Kernel = make([][]float64, len(rows))
+	if len(rows)%2 == 0 {
+		return "Kernel size must be odd"
+	}
 	for i, row := range rows {
 		cols := strings.Fields(row)
+		if len(cols)%2 == 0 {
+			return "Kernel size must be odd"
+		}
 		ce.Kernel[i] = make([]float64, len(cols))
 		for j, col := range cols {
 			value, err := strconv.ParseFloat(col, 64)
@@ -219,13 +226,16 @@ func (ce *ConvolutionEditor) LoadFilter(filter *ConvolutionFilter) {
 	ce.AnchorYField.SetText(fmt.Sprintf("%d", ce.AnchorY))
 }
 
-func (ce *ConvolutionEditor) GetFilter() ConvolutionFilter {
-	ce.UpdateKernel()
-	return ConvolutionFilter{
+func (ce *ConvolutionEditor) GetFilter() (*ConvolutionFilter, error) {
+	err := ce.UpdateKernel()
+	if err != "" {
+		return nil, errors.New(err)
+	}
+	return &ConvolutionFilter{
 		Kernel:  ce.Kernel,
 		Divisor: ce.Divisor,
 		Offset:  ce.Offset,
 		AnchorX: ce.AnchorX,
 		AnchorY: ce.AnchorY,
-	}
+	}, nil
 }

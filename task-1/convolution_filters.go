@@ -25,20 +25,20 @@ type ConvolutionFilter struct {
 func (f ConvolutionFilter) Apply(img image.Image) image.Image {
 	bounds := img.Bounds()
 	filtered := image.NewRGBA(bounds)
-	kernelSize := len(f.Kernel)
-	offset := kernelSize / 2
+	ySize := len(f.Kernel)
+	xSize := len(f.Kernel[0])
 	var wg sync.WaitGroup
 
-	for y := bounds.Min.Y + offset; y < bounds.Max.Y-offset; y++ {
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		wg.Add(1)
 		go func(y int) {
 			defer wg.Done()
-			for x := bounds.Min.X + offset; x < bounds.Max.X-offset; x++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				var rSum, gSum, bSum float64
-				for ky := 0; ky < kernelSize; ky++ {
-					for kx := 0; kx < kernelSize; kx++ {
-						ix := x + kx - f.AnchorX
-						iy := y + ky - f.AnchorY
+				for ky := 0; ky < ySize; ky++ {
+					for kx := 0; kx < xSize; kx++ {
+						ix := clampToEdge(x+kx-f.AnchorX, bounds.Min.X, bounds.Max.X-1)
+						iy := clampToEdge(y+ky-f.AnchorY, bounds.Min.Y, bounds.Max.Y-1)
 						r, g, b, _ := img.At(ix, iy).RGBA()
 
 						// Normalize to [0,1] range
@@ -67,6 +67,15 @@ func (f ConvolutionFilter) Apply(img image.Image) image.Image {
 
 	wg.Wait()
 	return filtered
+}
+
+func clampToEdge(value, min, max int) int {
+	if value < min {
+		return min
+	} else if value > max {
+		return max
+	}
+	return value
 }
 
 func LoadConvolutionFilters(folder string) ([]ConvolutionFilter, error) {
@@ -105,9 +114,23 @@ func LoadConvolutionFilter(file io.ReadCloser) (*ConvolutionFilter, error) {
 	}
 
 	// Read matrix size
-	size, err := strconv.Atoi(lines[0])
+	sizes := strings.Split(lines[0], " ")
+	if len(sizes) != 2 {
+		return nil, errors.New("invalid matrix size format")
+	}
+	xSize, err := strconv.Atoi(sizes[0])
 	if err != nil {
 		return nil, fmt.Errorf("invalid matrix size: %w", err)
+	}
+	ySize, err := strconv.Atoi(sizes[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid matrix size: %w", err)
+	}
+	if xSize%2 == 0 {
+		return nil, errors.New("matrix size must be odd")
+	}
+	if ySize%2 == 0 {
+		return nil, errors.New("matrix size must be odd")
 	}
 
 	// Read offset
@@ -132,11 +155,11 @@ func LoadConvolutionFilter(file io.ReadCloser) (*ConvolutionFilter, error) {
 	}
 
 	// Read kernel
-	kernel := make([][]float64, size)
-	for i := 0; i < size; i++ {
-		kernel[i] = make([]float64, size)
+	kernel := make([][]float64, ySize)
+	for i := 0; i < ySize; i++ {
+		kernel[i] = make([]float64, xSize)
 		values := strings.Fields(lines[5+i])
-		if len(values) != size {
+		if len(values) != xSize {
 			return nil, errors.New("invalid kernel row length")
 		}
 		for j, value := range values {
@@ -161,8 +184,9 @@ func SaveConvolutionFilter(filter ConvolutionFilter, file io.WriteCloser) error 
 	var builder strings.Builder
 
 	// Write matrix size
-	size := len(filter.Kernel)
-	builder.WriteString(fmt.Sprintf("%d\n", size))
+	ySize := len(filter.Kernel)
+	xSize := len(filter.Kernel[0])
+	builder.WriteString(fmt.Sprintf("%d %d\n", xSize, ySize))
 
 	// Write offset
 	builder.WriteString(fmt.Sprintf("%f\n", filter.Offset))
@@ -173,8 +197,8 @@ func SaveConvolutionFilter(filter ConvolutionFilter, file io.WriteCloser) error 
 	builder.WriteString(fmt.Sprintf("%d\n", filter.AnchorY))
 
 	// Write kernel
-	for i := 0; i < size; i++ {
-		for j := 0; j < size; j++ {
+	for i := 0; i < ySize; i++ {
+		for j := 0; j < xSize; j++ {
 			builder.WriteString(fmt.Sprintf("%f ", filter.Kernel[i][j]))
 		}
 		builder.WriteString("\n")

@@ -7,7 +7,7 @@ GOGET = $(GOCMD) get
 BINARY_NAME = main.o
 
 # All source files
-SOURCES = main.go convolution_editor.go convolution_filters.go filter.go filtered_image.go
+SOURCES = main.go convolution_editor.go convolution_filters.go filter.go filtered_image.go morphological_filters.go
 
 # Default target to build the binary
 all: build
