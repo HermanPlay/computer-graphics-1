@@ -6,11 +6,11 @@ import (
 	"image"
 	"image/color"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type ConvolutionFilter struct {
@@ -27,39 +27,45 @@ func (f ConvolutionFilter) Apply(img image.Image) image.Image {
 	filtered := image.NewRGBA(bounds)
 	kernelSize := len(f.Kernel)
 	offset := kernelSize / 2
+	var wg sync.WaitGroup
 
 	for y := bounds.Min.Y + offset; y < bounds.Max.Y-offset; y++ {
-		for x := bounds.Min.X + offset; x < bounds.Max.X-offset; x++ {
-			var rSum, gSum, bSum float64
-			for ky := 0; ky < kernelSize; ky++ {
-				for kx := 0; kx < kernelSize; kx++ {
-					ix := x + kx - f.AnchorX
-					iy := y + ky - f.AnchorY
-					r, g, b, _ := img.At(ix, iy).RGBA()
+		wg.Add(1)
+		go func(y int) {
+			defer wg.Done()
+			for x := bounds.Min.X + offset; x < bounds.Max.X-offset; x++ {
+				var rSum, gSum, bSum float64
+				for ky := 0; ky < kernelSize; ky++ {
+					for kx := 0; kx < kernelSize; kx++ {
+						ix := x + kx - f.AnchorX
+						iy := y + ky - f.AnchorY
+						r, g, b, _ := img.At(ix, iy).RGBA()
 
-					// Normalize to [0,1] range
-					normalizedR := normalizeColor(r)
-					normalizedG := normalizeColor(g)
-					normalizedB := normalizeColor(b)
+						// Normalize to [0,1] range
+						normalizedR := normalizeColor(r)
+						normalizedG := normalizeColor(g)
+						normalizedB := normalizeColor(b)
 
-					// Apply kernel weight
-					weight := f.Kernel[ky][kx]
-					rSum += weight * normalizedR
-					gSum += weight * normalizedG
-					bSum += weight * normalizedB
+						// Apply kernel weight
+						weight := f.Kernel[ky][kx]
+						rSum += weight * normalizedR
+						gSum += weight * normalizedG
+						bSum += weight * normalizedB
+					}
 				}
+				// Scale back to 0-255, apply divisor and offset
+				color := color.RGBA{
+					R: clamp((rSum * 255 / f.Divisor) + f.Offset),
+					G: clamp((gSum * 255 / f.Divisor) + f.Offset),
+					B: clamp((bSum * 255 / f.Divisor) + f.Offset),
+					A: 255, // Keep alpha fully opaque
+				}
+				filtered.Set(x, y, color)
 			}
-			// Scale back to 0-255, apply divisor and offset
-			color := color.RGBA{
-				R: clamp((rSum * 255 / f.Divisor) + f.Offset),
-				G: clamp((gSum * 255 / f.Divisor) + f.Offset),
-				B: clamp((bSum * 255 / f.Divisor) + f.Offset),
-				A: 255, // Keep alpha fully opaque
-			}
-			filtered.Set(x, y, color)
-		}
+		}(y)
 	}
-	log.Printf("Applied convolution filter")
+
+	wg.Wait()
 	return filtered
 }
 
@@ -140,7 +146,6 @@ func LoadConvolutionFilter(file io.ReadCloser) (*ConvolutionFilter, error) {
 			}
 		}
 	}
-	log.Printf("Kernel: %v", kernel)
 
 	filter := &ConvolutionFilter{
 		Kernel:  kernel,
