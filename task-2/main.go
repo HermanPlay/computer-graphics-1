@@ -33,6 +33,17 @@ type ImageResult struct {
 	Image  image.Image
 }
 
+func getK(input string) (uint32, error) {
+	k, err := strconv.ParseUint(input, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	if k < 2 {
+		return 0, fmt.Errorf("K should be greater than 1")
+	}
+	return uint32(k), nil
+}
+
 func drawSeparator(gtx layout.Context) layout.Dimensions {
 	bounds := image.Rect(0, 5, gtx.Constraints.Max.X-5, 5)
 
@@ -87,11 +98,18 @@ func run(window *app.Window) error {
 	var errorMessage *string = new(string)
 	originalImageScroll := widget.List{List: layout.List{Axis: layout.Horizontal}}
 	filteredImageScroll := widget.List{List: layout.List{Axis: layout.Vertical}}
+
 	kInput := new(widget.Editor)
-	kInput.SetText("2") // Default value for k
+	kInput.SetText("2")
+	krInput := new(widget.Editor)
+	krInput.SetText("2")
+	kgInput := new(widget.Editor)
+	kgInput.SetText("2")
+	kbInput := new(widget.Editor)
+	kbInput.SetText("2")
 
 	filterSelect := new(widget.Enum)
-	filterSelect.Value = "FloydSteinberg" // Default filter
+	filterSelect.Value = "FloydSteinberg"
 
 	filterOptions := map[string]ErrorFilter{
 		"FloydSteinberg": FloydSteinbergFilter,
@@ -224,20 +242,31 @@ func run(window *app.Window) error {
 						*errorMessage = "No image loaded"
 					} else {
 						*errorMessage = ""
-						k, err := strconv.Atoi(kInput.Text())
-						if err != nil || k < 2 {
-							*errorMessage = "Invalid value for k. Must be an integer >= 2."
+						selectedFilter, ok := filterOptions[filterSelect.Value]
+						if !ok {
+							*errorMessage = "Invalid filter selected."
 						} else {
-							selectedFilter, ok := filterOptions[filterSelect.Value]
-							if !ok {
-								*errorMessage = "Invalid filter selected."
-							} else {
+							kr, err := getK(krInput.Text())
+							if err != nil {
+								*errorMessage = fmt.Sprintf("Invalid kr %s", err.Error())
+							}
+							kg, err := getK(kgInput.Text())
+							if err != nil {
+								*errorMessage = fmt.Sprintf("Invalid kg %s", err.Error())
+							}
+							kb, err := getK(kbInput.Text())
+							if err != nil {
+								*errorMessage = fmt.Sprintf("Invalid kb %s", err.Error())
+							}
+							if *errorMessage == "" {
 								filteredImage.AddFilter(ErrorDithering{
-									K:      k,
+									KR:     kr,
+									KG:     kg,
+									KB:     kb,
 									Filter: selectedFilter,
 								})
-								window.Invalidate()
 							}
+							window.Invalidate()
 						}
 					}
 				}
@@ -246,18 +275,26 @@ func run(window *app.Window) error {
 						*errorMessage = "No image loaded"
 					} else {
 						*errorMessage = ""
-						k, err := strconv.Atoi(kInput.Text())
-						if err != nil || k < 2 {
-							*errorMessage = "Invalid value for k. Must be an integer >= 2."
-						} else {
-							uk := uint32(k)
-							filteredImage.AddFilter(UniformQuantization{
-								KR: uk,
-								KG: uk,
-								KB: uk,
-							})
-							window.Invalidate()
+						kr, err := getK(krInput.Text())
+						if err != nil {
+							*errorMessage = fmt.Sprintf("Invalid kr %s", err.Error())
 						}
+						kg, err := getK(kgInput.Text())
+						if err != nil {
+							*errorMessage = fmt.Sprintf("Invalid kg %s", err.Error())
+						}
+						kb, err := getK(kbInput.Text())
+						if err != nil {
+							*errorMessage = fmt.Sprintf("Invalid kb %s", err.Error())
+						}
+						if *errorMessage == "" {
+							filteredImage.AddFilter(UniformQuantization{
+								KR: kr,
+								KG: kg,
+								KB: kb,
+							})
+						}
+						window.Invalidate()
 					}
 				}
 				if resetButton.Clicked(gtx) {
@@ -516,12 +553,32 @@ func run(window *app.Window) error {
 									}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-												return material.Body1(theme, "K:").Layout(gtx)
+												return material.Body1(theme, "KR:").Layout(gtx)
 											})
 										}),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-												return material.Editor(theme, kInput, "Number of Colors (k)").Layout(gtx)
+												return material.Editor(theme, krInput, "kr").Layout(gtx)
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return material.Body1(theme, "KG:").Layout(gtx)
+											})
+										}),
+										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return material.Editor(theme, kgInput, "kg").Layout(gtx)
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return material.Body1(theme, "KB:").Layout(gtx)
+											})
+										}),
+										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return material.Editor(theme, kbInput, "kb").Layout(gtx)
 											})
 										}),
 									)

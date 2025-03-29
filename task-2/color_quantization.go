@@ -42,45 +42,26 @@ func (u UniformQuantization) Apply(img image.Image) image.Image {
 			sumR[regionR] += int(r / 257)
 			sumG[regionG] += int(g / 257)
 			sumB[regionB] += int(b / 257)
-
 			countR[regionR]++
 			countG[regionG]++
 			countB[regionB]++
 		}
 	}
 
-	repR := make([]int, u.KR)
-	repG := make([]int, u.KG)
-	repB := make([]int, u.KB)
-
-	for i := uint32(0); i < u.KR; i++ {
-		if countR[i] > 0 {
-			repR[i] = sumR[i] / countR[i]
-		}
-	}
-	for i := uint32(0); i < u.KG; i++ {
-		if countG[i] > 0 {
-			repG[i] = sumG[i] / countG[i]
-		}
-	}
-	for i := uint32(0); i < u.KB; i++ {
-		if countB[i] > 0 {
-			repB[i] = sumB[i] / countB[i]
-		}
-	}
-
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			r, g, b, a := img.At(x, y).RGBA()
-
 			regionR := clampIndex(r/257/stepR, u.KR)
 			regionG := clampIndex(g/257/stepG, u.KG)
 			regionB := clampIndex(b/257/stepB, u.KB)
+			repR := sumR[regionR] / countR[regionR]
+			repG := sumG[regionG] / countG[regionG]
+			repB := sumB[regionB] / countB[regionB]
 
 			quantized.Set(x, y, color.RGBA{
-				R: uint8(repR[regionR]),
-				G: uint8(repG[regionG]),
-				B: uint8(repB[regionB]),
+				R: uint8(repR),
+				G: uint8(repG),
+				B: uint8(repB),
 				A: uint8(a / 257),
 			})
 		}
