@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 
+	"errors"
+
 	"gioui.org/app"
 	"gioui.org/io/event"
 	"gioui.org/layout"
@@ -39,9 +41,17 @@ func getK(input string) (uint32, error) {
 		return 0, err
 	}
 	if k < 2 {
-		return 0, fmt.Errorf("K should be greater than 1")
+		return 0, errors.New("k should be greater than 1")
 	}
 	return uint32(k), nil
+}
+
+func addFilter(filteredImage *FilteredImage, filter Filter) error {
+	if filteredImage == nil {
+		return errors.New("no image loaded")
+	}
+	filteredImage.AddFilter(filter)
+	return nil
 }
 
 func drawSeparator(gtx layout.Context) layout.Dimensions {
@@ -54,6 +64,65 @@ func drawSeparator(gtx layout.Context) layout.Dimensions {
 
 func SaveImage(img image.Image, writer io.Writer) error {
 	return png.Encode(writer, img)
+}
+
+func handleErrorDithering(img *FilteredImage, selected *widget.Enum, rIn, gIn, bIn *widget.Editor, options map[string]ErrorFilter) error {
+	if img == nil {
+		return errors.New("no image loaded")
+	}
+
+	selectedFilter, ok := options[selected.Value]
+	if !ok {
+		return errors.New("invalid filter selected")
+	}
+
+	kr, err := getK(rIn.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kr %s", err.Error())
+	}
+	kg, err := getK(gIn.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kg %s", err.Error())
+	}
+	kb, err := getK(bIn.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kb %s", err.Error())
+	}
+
+	img.AddFilter(ErrorDithering{
+		KR:     kr,
+		KG:     kg,
+		KB:     kb,
+		Filter: selectedFilter,
+	})
+	return nil
+}
+
+func handleUniformQuantization(filteredImage *FilteredImage, krInput, kgInput, kbInput *widget.Editor) error {
+	if filteredImage == nil {
+		return errors.New("no image loaded")
+	}
+
+	kr, err := getK(krInput.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kr %s", err.Error())
+	}
+	kg, err := getK(kgInput.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kg %s", err.Error())
+	}
+	kb, err := getK(kbInput.Text())
+	if err != nil {
+		return fmt.Errorf("invalid kb %s", err.Error())
+	}
+
+	filteredImage.AddFilter(UniformQuantization{
+		KR: kr,
+		KG: kg,
+		KB: kb,
+	})
+
+	return nil
 }
 
 func main() {
@@ -98,6 +167,19 @@ func run(window *app.Window) error {
 	var errorMessage *string = new(string)
 	originalImageScroll := widget.List{List: layout.List{Axis: layout.Horizontal}}
 	filteredImageScroll := widget.List{List: layout.List{Axis: layout.Vertical}}
+
+	filters := []struct {
+		filter Filter
+		button *widget.Clickable
+	}{
+		{filter: InversionFilter{}, button: inversionButton},
+		{filter: BrightnessFilter{Factor: brighthnessFactor}, button: brightnessButton},
+		{filter: ContrastFilter{Factor: contrastFactor}, button: contrastButton},
+		{filter: GammaFilter{Gamma: gammaValue}, button: gammaButton},
+		{filter: MorphologicalFilter{Size: 3, IsErosion: true}, button: erosionButton},
+		{filter: MorphologicalFilter{Size: 3, IsErosion: false}, button: dilationButton},
+		{filter: GrayscaleFilter{}, button: grayScaleButton},
+	}
 
 	kInput := new(widget.Editor)
 	kInput.SetText("2")
@@ -145,13 +227,13 @@ func run(window *app.Window) error {
 					go func() {
 						file, err := expl.ChooseFile("png", "jpeg", "jpg")
 						if err != nil {
-							fmt.Printf("failed opening image file: %v", err)
+							*errorMessage = fmt.Sprintf("Failed to open image: %v", err)
 							return
 						}
 						defer file.Close()
 						imgData, format, err := image.Decode(file)
 						if err != nil {
-							fmt.Printf("failed decoding image data: %v", err)
+							*errorMessage = fmt.Sprintf("Failed to decode image: %v", err)
 							return
 						}
 						*errorMessage = ""
@@ -174,128 +256,32 @@ func run(window *app.Window) error {
 						*errorMessage = ""
 					}()
 				}
-				if inversionButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
+				for _, f := range filters {
+					if f.button.Clicked(gtx) {
+						if err := addFilter(filteredImage, f.filter); err != nil {
+							*errorMessage = err.Error()
+							break
+						}
 						*errorMessage = ""
-						filteredImage.AddFilter(InversionFilter{})
-						window.Invalidate()
-					}
-				}
-				if brightnessButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(BrightnessFilter{Factor: brighthnessFactor})
-						window.Invalidate()
-					}
-				}
-				if contrastButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(ContrastFilter{Factor: contrastFactor})
-						window.Invalidate()
-					}
-				}
-				if gammaButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(GammaFilter{Gamma: gammaValue})
-						window.Invalidate()
-					}
-				}
-				if erosionButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(MorphologicalFilter{Size: 3, IsErosion: true})
-						window.Invalidate()
-					}
-				}
-				if dilationButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(MorphologicalFilter{Size: 3, IsErosion: false})
-						window.Invalidate()
-					}
-				}
-				if grayScaleButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
-					} else {
-						*errorMessage = ""
-						filteredImage.AddFilter(GrayscaleFilter{})
 						window.Invalidate()
 					}
 				}
 				if errorDitheringButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
+					err := handleErrorDithering(filteredImage, filterSelect, krInput, kgInput, kbInput, filterOptions)
+					if err != nil {
+						*errorMessage = err.Error()
 					} else {
 						*errorMessage = ""
-						selectedFilter, ok := filterOptions[filterSelect.Value]
-						if !ok {
-							*errorMessage = "Invalid filter selected."
-						} else {
-							kr, err := getK(krInput.Text())
-							if err != nil {
-								*errorMessage = fmt.Sprintf("Invalid kr %s", err.Error())
-							}
-							kg, err := getK(kgInput.Text())
-							if err != nil {
-								*errorMessage = fmt.Sprintf("Invalid kg %s", err.Error())
-							}
-							kb, err := getK(kbInput.Text())
-							if err != nil {
-								*errorMessage = fmt.Sprintf("Invalid kb %s", err.Error())
-							}
-							if *errorMessage == "" {
-								filteredImage.AddFilter(ErrorDithering{
-									KR:     kr,
-									KG:     kg,
-									KB:     kb,
-									Filter: selectedFilter,
-								})
-							}
-							window.Invalidate()
-						}
 					}
+					window.Invalidate()
 				}
 				if uniformQuantizationButton.Clicked(gtx) {
-					if filteredImage == nil {
-						*errorMessage = "No image loaded"
+					if err := handleUniformQuantization(filteredImage, krInput, kgInput, kbInput); err != nil {
+						*errorMessage = err.Error()
 					} else {
 						*errorMessage = ""
-						kr, err := getK(krInput.Text())
-						if err != nil {
-							*errorMessage = fmt.Sprintf("Invalid kr %s", err.Error())
-						}
-						kg, err := getK(kgInput.Text())
-						if err != nil {
-							*errorMessage = fmt.Sprintf("Invalid kg %s", err.Error())
-						}
-						kb, err := getK(kbInput.Text())
-						if err != nil {
-							*errorMessage = fmt.Sprintf("Invalid kb %s", err.Error())
-						}
-						if *errorMessage == "" {
-							filteredImage.AddFilter(UniformQuantization{
-								KR: kr,
-								KG: kg,
-								KB: kb,
-							})
-						}
-						window.Invalidate()
 					}
+					window.Invalidate()
 				}
 				if resetButton.Clicked(gtx) {
 					if filteredImage == nil {
@@ -347,20 +333,24 @@ func run(window *app.Window) error {
 				if applyKernelButton.Clicked(gtx) {
 					if filteredImage == nil {
 						*errorMessage = "No image loaded"
+						continue
+					}
+					err := convolutionEditor.UpdateKernel()
+					if err != nil {
+						*errorMessage = err.Error()
 					} else {
-						err := convolutionEditor.UpdateKernel()
-						if err != "" {
-							*errorMessage = err
+						if convolutionEditor.ErrorMessage != "" {
+							*errorMessage = convolutionEditor.ErrorMessage
 						} else {
-							if convolutionEditor.ErrorMessage != "" {
-								*errorMessage = convolutionEditor.ErrorMessage
-							} else {
-								*errorMessage = ""
-								log.Printf("Applying kernel: %v", convolutionEditor.Kernel)
-								filteredImage.AddFilter(ConvolutionFilter{Kernel: convolutionEditor.Kernel, Divisor: convolutionEditor.Divisor, Offset: convolutionEditor.Offset, AnchorX: convolutionEditor.AnchorX, AnchorY: convolutionEditor.AnchorY})
-							}
-							window.Invalidate()
+							*errorMessage = ""
+							log.Printf("Applying kernel: %v", convolutionEditor.Kernel)
+							filteredImage.AddFilter(ConvolutionFilter{Kernel: convolutionEditor.Kernel,
+								Divisor: convolutionEditor.Divisor,
+								Offset:  convolutionEditor.Offset,
+								AnchorX: convolutionEditor.AnchorX,
+								AnchorY: convolutionEditor.AnchorY})
 						}
+						window.Invalidate()
 					}
 				}
 
@@ -375,7 +365,11 @@ func run(window *app.Window) error {
 							Spacing: layout.SpaceEvenly,
 						}.Layout(gtx,
 							layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-								return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(10), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Inset{Top: unit.Dp(10),
+									Bottom: unit.Dp(10),
+									Left:   unit.Dp(10),
+									Right:  unit.Dp(10),
+								}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 									return material.List(theme, &originalImageScroll).Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
 										return material.List(theme, &filteredImageScroll).Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
 											if filteredImage == nil || filteredImage.OriginalImage == nil {
@@ -392,9 +386,13 @@ func run(window *app.Window) error {
 								})
 							}),
 							layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-								return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(10), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return material.List(theme, &originalImageScroll).Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
-										return material.List(theme, &filteredImageScroll).Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
+								return layout.Inset{Top: unit.Dp(10),
+									Bottom: unit.Dp(10),
+									Left:   unit.Dp(10),
+									Right:  unit.Dp(10),
+								}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return material.List(theme, &originalImageScroll).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+										return material.List(theme, &filteredImageScroll).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
 											if filteredImage == nil || filteredImage.OriginalImage == nil {
 												return layout.Dimensions{}
 											} else {
@@ -418,7 +416,11 @@ func run(window *app.Window) error {
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
 									if *errorMessage != "" {
-										return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(10), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return layout.Inset{Top: unit.Dp(10),
+											Bottom: unit.Dp(10),
+											Left:   unit.Dp(10),
+											Right:  unit.Dp(10),
+										}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 											caption := material.Caption(theme, *errorMessage)
 											caption.Color = color.NRGBA{255, 0, 0, 255}
 											return caption.Layout(gtx)
@@ -435,12 +437,20 @@ func run(window *app.Window) error {
 										Spacing: layout.SpaceEvenly,
 									}.Layout(gtx,
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, openButton, "Open").Layout(gtx)
 											})
 										}),
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, saveButton, "Save").Layout(gtx)
 											})
 										}),
@@ -455,12 +465,20 @@ func run(window *app.Window) error {
 										Spacing: layout.SpaceEvenly,
 									}.Layout(gtx,
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, inversionButton, "Invert").Layout(gtx)
 											})
 										}),
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, brightnessButton, "Brighten").Layout(gtx)
 											})
 										}),
@@ -474,12 +492,20 @@ func run(window *app.Window) error {
 										Spacing: layout.SpaceEvenly,
 									}.Layout(gtx,
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, contrastButton, "Contrast").Layout(gtx)
 											})
 										}),
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, gammaButton, "Gamma").Layout(gtx)
 											})
 										}),
@@ -493,12 +519,20 @@ func run(window *app.Window) error {
 										Spacing: layout.SpaceEvenly,
 									}.Layout(gtx,
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, erosionButton, "Erosion").Layout(gtx)
 											})
 										}),
 										layout.Flexed(0.5, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Button(theme, dilationButton, "Dilation").Layout(gtx)
 											})
 										}),
@@ -507,7 +541,11 @@ func run(window *app.Window) error {
 							),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, resetButton, "Reset").Layout(gtx)
 									})
 								},
@@ -515,21 +553,33 @@ func run(window *app.Window) error {
 							layout.Rigid(drawSeparator),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, loadKernelButton, "Load Kernel").Layout(gtx)
 									})
 								},
 							),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, saveKernelButton, "Save Kernel").Layout(gtx)
 									})
 								},
 							),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, applyKernelButton, "Apply Kernel").Layout(gtx)
 									})
 								},
@@ -540,7 +590,11 @@ func run(window *app.Window) error {
 							layout.Rigid(drawSeparator),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, grayScaleButton, "Grayscale").Layout(gtx)
 									})
 								},
@@ -552,32 +606,56 @@ func run(window *app.Window) error {
 										Spacing: layout.SpaceBetween,
 									}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Body1(theme, "KR:").Layout(gtx)
 											})
 										}),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Editor(theme, krInput, "kr").Layout(gtx)
 											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Body1(theme, "KG:").Layout(gtx)
 											})
 										}),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Editor(theme, kgInput, "kg").Layout(gtx)
 											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Body1(theme, "KB:").Layout(gtx)
 											})
 										}),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(5),
+												Bottom: unit.Dp(5),
+												Left:   unit.Dp(5),
+												Right:  unit.Dp(5),
+											}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return material.Editor(theme, kbInput, "kb").Layout(gtx)
 											})
 										}),
@@ -612,14 +690,22 @@ func run(window *app.Window) error {
 							),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, errorDitheringButton, "Error Dithering").Layout(gtx)
 									})
 								},
 							),
 							layout.Rigid(
 								func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(5), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, uniformQuantizationButton, "Uniform Quantization").Layout(gtx)
 									})
 								},

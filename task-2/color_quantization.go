@@ -39,6 +39,7 @@ func (u UniformQuantization) Apply(img image.Image) image.Image {
 			regionG := clampIndex(g/257/stepG, u.KG)
 			regionB := clampIndex(b/257/stepB, u.KB)
 
+			// Update sums and counts
 			sumR[regionR] += int(r / 257)
 			sumG[regionG] += int(g / 257)
 			sumB[regionB] += int(b / 257)

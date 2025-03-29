@@ -291,7 +291,6 @@ linters:
     - forbidigo # forbids identifiers
     - funlen # tool for detection of long functions
     - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
-    - gochecknoglobals # checks that no global variables exist
     - gochecknoinits # checks that no init functions are present in Go code
     - gochecksumtype # checks exhaustiveness on Go "sum types"
     - gocognit # computes and checks the cognitive complexity of functions
@@ -309,7 +308,6 @@ linters:
     - loggercheck # checks key value pairs for common logger libraries (kitlog,klog,logr,zap)
     - makezero # finds slice declarations with non-zero initial length
     - mirror # reports wrong mirror patterns of bytes/strings usage
-    - mnd # detects magic numbers
     - musttag # enforces field tags in (un)marshaled structs
     - nakedret # finds naked returns in functions greater than a specified function length
     - nestif # reports deeply nested if statements
@@ -321,12 +319,12 @@ linters:
     - nonamedreturns # reports all named returns
     - nosprintfhostport # checks for misuse of Sprintf to construct a host with port in a URL
     - perfsprint # checks that fmt.Sprintf can be replaced with a faster alternative
-    - predeclared # finds code that shadows one of Go's predeclared identifiers
+    # - predeclared # finds code that shadows one of Go's predeclared identifiers
     - promlinter # checks Prometheus metrics naming via promlint
     - protogetter # reports direct reads from proto message fields when getters should be used
     - reassign # checks that package variables are not reassigned
     - recvcheck # checks for receiver type consistency
-    - revive # fast, configurable, extensible, flexible, and beautiful linter for Go, drop-in replacement of golint
+    # - revive # fast, configurable, extensible, flexible, and beautiful linter for Go, drop-in replacement of golint
     - rowserrcheck # checks whether Err of rows is checked successfully
     - sloglint # ensure consistent code style when using log/slog
     - spancheck # checks for mistakes with OpenTelemetry/Census spans

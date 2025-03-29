@@ -141,32 +141,31 @@ func (ce *ConvolutionEditor) layoutControls(gtx layout.Context, th *material.The
 		}),
 	)
 }
-
-func (ce *ConvolutionEditor) UpdateKernel() string {
+func (ce *ConvolutionEditor) UpdateKernel() error {
 	kernelText := ce.KernelField.Text()
 	rows := strings.Split(kernelText, "\n")
 	ce.Kernel = make([][]float64, len(rows))
 	if len(rows)%2 == 0 {
-		return "Kernel size must be odd"
+		return errors.New("kernel size must be odd")
 	}
 	for i, row := range rows {
 		cols := strings.Fields(row)
 		if len(cols)%2 == 0 {
-			return "Kernel size must be odd"
+			return errors.New("kernel size must be odd")
 		}
 		ce.Kernel[i] = make([]float64, len(cols))
 		for j, col := range cols {
 			value, err := strconv.ParseFloat(col, 64)
 			if err != nil {
-				return fmt.Sprintf("Invalid kernel value: %s", col)
+				return fmt.Errorf("invalid kernel value: %s", col)
 			}
 			ce.Kernel[i][j] = value
 		}
 	}
 	if ce.AutoDivisor.Value {
 		ce.Divisor = 0
-		for i := 0; i < len(ce.Kernel); i++ {
-			for j := 0; j < len(ce.Kernel[i]); j++ {
+		for i := range ce.Kernel {
+			for j := range ce.Kernel[i] {
 				ce.Divisor += ce.Kernel[i][j]
 			}
 		}
@@ -176,7 +175,7 @@ func (ce *ConvolutionEditor) UpdateKernel() string {
 	} else {
 		divisor, err := strconv.ParseFloat(ce.DivisorField.Text(), 64)
 		if err != nil {
-			return fmt.Sprintf("Invalid divisor value: %s", ce.DivisorField.Text())
+			return fmt.Errorf("invalid divisor value: %s", ce.DivisorField.Text())
 		}
 		ce.Divisor = divisor
 	}
@@ -186,20 +185,20 @@ func (ce *ConvolutionEditor) UpdateKernel() string {
 	}
 	offset, err := strconv.ParseFloat(offsetText, 64)
 	if err != nil {
-		return fmt.Sprintf("Invalid offset value: %s", offsetText)
+		return fmt.Errorf("invalid offset value: %s", offsetText)
 	}
 	ce.Offset = offset
 	anchorX, err := strconv.Atoi(ce.AnchorXField.Text())
 	if err != nil || anchorX < 0 || anchorX >= len(ce.Kernel[0]) {
-		return fmt.Sprintf("Invalid anchor X value: %s", ce.AnchorXField.Text())
+		return fmt.Errorf("invalid anchor X value: %s", ce.AnchorXField.Text())
 	}
 	ce.AnchorX = anchorX
 	anchorY, err := strconv.Atoi(ce.AnchorYField.Text())
 	if err != nil || anchorY < 0 || anchorY >= len(ce.Kernel) {
-		return fmt.Sprintf("Invalid anchor Y value: %s", ce.AnchorYField.Text())
+		return fmt.Errorf("invalid anchor Y value: %s", ce.AnchorYField.Text())
 	}
 	ce.AnchorY = anchorY
-	return ""
+	return nil
 }
 
 func (ce *ConvolutionEditor) LoadFilter(filter *ConvolutionFilter) {
@@ -222,14 +221,14 @@ func (ce *ConvolutionEditor) LoadFilter(filter *ConvolutionFilter) {
 	ce.KernelField.SetText(kernelText.String())
 	ce.DivisorField.SetText(fmt.Sprintf("%f", ce.Divisor))
 	ce.OffsetField.SetText(fmt.Sprintf("%f", ce.Offset))
-	ce.AnchorXField.SetText(fmt.Sprintf("%d", ce.AnchorX))
-	ce.AnchorYField.SetText(fmt.Sprintf("%d", ce.AnchorY))
+	ce.AnchorXField.SetText(strconv.Itoa(ce.AnchorX))
+	ce.AnchorYField.SetText(strconv.Itoa(ce.AnchorY))
 }
 
 func (ce *ConvolutionEditor) GetFilter() (*ConvolutionFilter, error) {
 	err := ce.UpdateKernel()
-	if err != "" {
-		return nil, errors.New(err)
+	if err != nil {
+		return nil, err
 	}
 	return &ConvolutionFilter{
 		Kernel:  ce.Kernel,

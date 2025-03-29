@@ -35,8 +35,8 @@ func (f ConvolutionFilter) Apply(img image.Image) image.Image {
 			defer wg.Done()
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				var rSum, gSum, bSum float64
-				for ky := 0; ky < ySize; ky++ {
-					for kx := 0; kx < xSize; kx++ {
+				for ky := range ySize {
+					for kx := range xSize {
 						ix := clampToEdge(x+kx-f.AnchorX, bounds.Min.X, bounds.Max.X-1)
 						iy := clampToEdge(y+ky-f.AnchorY, bounds.Min.Y, bounds.Max.Y-1)
 						r, g, b, _ := img.At(ix, iy).RGBA()
@@ -156,7 +156,7 @@ func LoadConvolutionFilter(file io.ReadCloser) (*ConvolutionFilter, error) {
 
 	// Read kernel
 	kernel := make([][]float64, ySize)
-	for i := 0; i < ySize; i++ {
+	for i := range ySize {
 		kernel[i] = make([]float64, xSize)
 		values := strings.Fields(lines[5+i])
 		if len(values) != xSize {
@@ -197,8 +197,8 @@ func SaveConvolutionFilter(filter ConvolutionFilter, file io.WriteCloser) error 
 	builder.WriteString(fmt.Sprintf("%d\n", filter.AnchorY))
 
 	// Write kernel
-	for i := 0; i < ySize; i++ {
-		for j := 0; j < xSize; j++ {
+	for i := range ySize {
+		for j := range xSize {
 			builder.WriteString(fmt.Sprintf("%f ", filter.Kernel[i][j]))
 		}
 		builder.WriteString("\n")

@@ -93,7 +93,7 @@ func (f ContrastFilter) Apply(img image.Image) image.Image {
 	return contrastEnhanced
 }
 
-// Helper function to apply middle-threshold contrast based on the pixel value
+// Helper function to apply middle-threshold contrast based on the pixel value.
 func (f ContrastFilter) applyMiddleShift(value float64, contrastFactor float64) float64 {
 	// Calculate the difference from the middle value (0.5)
 	diff := value - 0.5
