@@ -163,6 +163,7 @@ func run(window *app.Window) error {
 	grayScaleButton := new(widget.Clickable)
 	errorDitheringButton := new(widget.Clickable)
 	uniformQuantizationButton := new(widget.Clickable)
+	ycbcrButton := new(widget.Clickable)
 	convolutionEditor := NewConvolutionEditor()
 	var errorMessage *string = new(string)
 	originalImageScroll := widget.List{List: layout.List{Axis: layout.Horizontal}}
@@ -282,6 +283,15 @@ func run(window *app.Window) error {
 						*errorMessage = ""
 					}
 					window.Invalidate()
+				}
+				if ycbcrButton.Clicked(gtx) {
+					if filteredImage == nil {
+						*errorMessage = "No image loaded"
+					} else {
+						filteredImage.AddFilter(YCbCrFilter)
+						*errorMessage = ""
+						window.Invalidate()
+					}
 				}
 				if resetButton.Clicked(gtx) {
 					if filteredImage == nil {
@@ -707,6 +717,17 @@ func run(window *app.Window) error {
 										Right:  unit.Dp(5),
 									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return material.Button(theme, uniformQuantizationButton, "Uniform Quantization").Layout(gtx)
+									})
+								},
+							),
+							layout.Rigid(
+								func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(5),
+										Bottom: unit.Dp(5),
+										Left:   unit.Dp(5),
+										Right:  unit.Dp(5),
+									}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return material.Button(theme, ycbcrButton, "YCbCr").Layout(gtx)
 									})
 								},
 							),
