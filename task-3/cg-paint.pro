@@ -19,7 +19,9 @@ SOURCES += \
     polygon.cpp \
     circle.cpp \
     circleTool.cpp \
-    figure.cpp
+    figure.cpp \
+    pillTool.cpp \
+    pill.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -31,7 +33,9 @@ HEADERS += \
     polygonTool.h \
     polygon.h \
     circle.h \
-    circleTool.h 
+    circleTool.h \
+    pillTool.h \
+    pill.h
 
 FORMS += \
     mainwindow.ui

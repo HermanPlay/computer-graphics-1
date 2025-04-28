@@ -1,5 +1,6 @@
 #include "canvas.h"
 #include "figure.h"
+#include "pill.h"
 #include "qevent.h"
 #include "qlogging.h"
 #include <QMouseEvent>
@@ -9,11 +10,13 @@
 #include <QContextMenuEvent>
 #include <QFile>
 #include <QTextStream>
+#include "pill.h"
 
 Canvas::Canvas(QWidget *parent)
     : QWidget(parent), currentTool(nullptr)
 {
     setMouseTracking(true); // Enable mouse tracking even when no button is pressed
+    figures.push_back(new Pill(QPoint(100, 100), QPoint(200, 200), QPoint(210, 210)));
 }
 
 void Canvas::setCurrentTool(Tool *tool)

@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include "canvas.h"
 #include "circleTool.h"
+#include "pillTool.h"
 #include "pointer.h"
 #include "polygonTool.h"
 #include "tool.h"
@@ -32,12 +33,14 @@ private:
     LineTool* lineTool;
     PolygonTool* polygonTool;
     CircleTool* circleTool;
+    PillTool *pillTool;
 
 private slots:
     void onPointerButtonClicked();
     void onLineButtonClicked();
     void onPolygonButtonClicked();
     void onCircleButtonClicked();
+    void onPillButtonClicked();
     void setCurrentTool(Tool* tool);
 };
 #endif // MAINWINDOW_H

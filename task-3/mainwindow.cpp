@@ -40,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(findChild<QPushButton*>("lineButton"), &QPushButton::clicked, this, &MainWindow::onLineButtonClicked);
     connect(findChild<QPushButton*>("polygonButton"), &QPushButton::clicked, this, &MainWindow::onPolygonButtonClicked);
     connect(findChild<QPushButton*>("circleButton"), &QPushButton::clicked, this, &MainWindow::onCircleButtonClicked);
+    connect(findChild<QPushButton*>("pillButton"), &QPushButton::clicked, this, &MainWindow::onPillButtonClicked);
+
 
     connect(findChild<QAction*>("actionClear"), &QAction::triggered, this, [this]() {
         if (canvas) {
@@ -124,6 +126,7 @@ MainWindow::MainWindow(QWidget *parent)
     lineTool = new LineTool(); 
     polygonTool = new PolygonTool();
     circleTool = new CircleTool();
+    pillTool = new PillTool();
 
     setCurrentTool(pointerTool);
 }
@@ -159,6 +162,11 @@ void MainWindow::onCircleButtonClicked()
     setCurrentTool(circleTool);
 }
 
+void MainWindow::onPillButtonClicked()
+{
+    // Placeholder for Circle tool logic
+    setCurrentTool(pillTool);
+}
 void MainWindow::setCurrentTool(Tool* tool)
 {
     currentTool = tool;

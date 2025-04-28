@@ -101,7 +101,7 @@
         <property name="styleSheet">
          <string notr="true">background-color: lightgray;</string>
         </property>
-        <layout class="QVBoxLayout" name="toolLayout" stretch="0,0,0,0,0">
+        <layout class="QVBoxLayout" name="toolLayout" stretch="0,0,0,0,0,0">
          <property name="spacing">
           <number>6</number>
          </property>
@@ -146,6 +146,13 @@
            <property name="icon">
             <iconset resource="resources.qrc">
              <normaloff>:/toolbar/assets/circle.png</normaloff>:/toolbar/assets/circle.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pillButton">
+           <property name="text">
+            <string>PillTool</string>
            </property>
           </widget>
          </item>
