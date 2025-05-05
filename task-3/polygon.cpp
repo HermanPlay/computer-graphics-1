@@ -1,3 +1,4 @@
+#include "line.h"
 #include "polygon.h"
 #include "qcolor.h"
 #include "qpainter.h"
@@ -11,7 +12,7 @@ void Polygon::draw(QPainter& painter) {
     if (vertices.size() < 2) {
         // Draw larger dots for individual vertices
         for (const auto& vertex : vertices) {
-            painter.drawEllipse(vertex, radius, radius); 
+            painter.drawEllipse(vertex, radius, radius);
         }
         return; // Not enough vertices to draw edges
     }
@@ -34,8 +35,8 @@ void Polygon::draw(QPainter& painter) {
             std::swap(dx, dy);
         }
 
-        int sx = (x2 > x1) ? 1 : -1; 
-        int sy = (y2 > y1) ? 1 : -1; 
+        int sx = (x2 > x1) ? 1 : -1;
+        int sy = (y2 > y1) ? 1 : -1;
 
         int d = 2 * dy - dx;
         int x = x1, y = y1;
@@ -53,13 +54,11 @@ void Polygon::draw(QPainter& painter) {
 
     // Draw all edges of the polygon
     for (size_t i = 0; i < vertices.size(); ++i) {
-        if (!isAntiAliasingEnabled()){
-
-            drawLineMidpoint(vertices[i], vertices[(i + 1) % vertices.size()]);
-        } else {
-            guptaSproullsLine(painter, vertices[i], vertices[(i+1) % vertices.size()]);
-        }
-    }
+        Line line1(vertices[i], vertices[(i+1)%vertices.size()]);
+        line1.setAntiAliasing(isAntiAliasingEnabled());
+        line1.setColor(color);
+        line1.setThickness(thickness);
+        line1.draw(painter);    }
 
     // Draw larger dots for each vertex
     for (const QPoint& vertex : vertices) {
@@ -148,7 +147,7 @@ void Polygon::guptaSproullsLine(QPainter& painter, QPoint start, QPoint end) {
     float two_dx_invDenom = 2.0f * dx * invDenom;
 
     auto intensifyPixel = [&](int px, int py, float dist) {
-        float cov = std::max(0.0f, 1.0f - dist);  
+        float cov = std::max(0.0f, 1.0f - dist);
         int alpha = static_cast<int>(cov * 255);
         QColor tempColor = QColor(color);
         tempColor.setAlpha(alpha);
