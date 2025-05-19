@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/toolbar">
+        <file>assets/mouse.png</file>
+        <file>assets/line.png</file>
+        <file>assets/circle.png</file>
+        <file>assets/polygon.png</file>
+        <file>assets/rectangle.png</file>
+    </qresource>
+</RCC>
