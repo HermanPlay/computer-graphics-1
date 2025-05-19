@@ -118,6 +118,7 @@ Figure* Canvas::getFigureAt(const QPoint& pos)
 
 void Canvas::clearFigures() {
     for (Figure* figure : figures) {
+        clippingManager->deletePairs(figure);
         delete figure;
     }
     figures.clear();
