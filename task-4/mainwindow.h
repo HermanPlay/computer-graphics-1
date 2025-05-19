@@ -7,9 +7,11 @@
 #include "clippingTool.h"
 #include "pointer.h"
 #include "polygonTool.h"
+#include "bucketTool.h"
 #include "tool.h"
 #include "lineTool.h"
 #include "rectangleTool.h"
+#include <QPixmap>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -29,6 +31,7 @@ private:
     Ui::MainWindow *ui;
     Canvas *canvas; // Add canvas as a member
     Tool* currentTool;
+    QPixmap bucketToolTexture;
 
     Pointer* pointerTool;
     LineTool* lineTool;
@@ -36,6 +39,7 @@ private:
     CircleTool* circleTool;
     RectangleTool* rectangleTool;
     ClippingTool* clippingTool;
+    BucketTool* bucketTool;
 
 private slots:
     void onPointerButtonClicked();
@@ -44,6 +48,7 @@ private slots:
     void onCircleButtonClicked();
     void onRectangleButtonClicked();
     void onCliperkaButtonClicked();
+    void onBucketButtonClicked();
     void setCurrentTool(Tool* tool);
 };
 #endif // MAINWINDOW_H

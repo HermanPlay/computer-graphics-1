@@ -2,9 +2,9 @@
 #include "circleTool.h"
 #include "clippingTool.h"
 #include "polygonTool.h"
+#include "bucketTool.h"
 #include "qdebug.h"
 #include "qfiledialog.h"
-#include "qguiapplication_platform.h"
 #include "qlabel.h"
 #include "qobject.h"
 #include "qpushbutton.h"
@@ -30,20 +30,31 @@ MainWindow::MainWindow(QWidget *parent)
     QSpinBox* thicknessSpinBox = findChild<QSpinBox*>("thicknessSpinBox");
     QLabel* colorLabel = findChild<QLabel*>("colorLabel");
     QLabel* thicknessLabel = findChild<QLabel*>("thicknessLabel");
-    QPushButton* colorButton = findChild<QPushButton*>("colorButton");
+    QPushButton* colorButton = findChild<QPushButton*>("colorButton"); // Border color button
     QLabel* fillColorLabel = findChild<QLabel*>("fillColorLabel");
-    QPushButton* fillColorButton = findChild<QPushButton*>("fillColorButton");
+    QPushButton* fillColorButton = findChild<QPushButton*>("fillColorButton"); // Fill color button
     QPushButton* clearColorButton = findChild<QPushButton*>("clearColorButton");
     QPushButton* selectImgButton = findChild<QPushButton*>("selectImgButton");
     QPushButton* removeImgButton = findChild<QPushButton*>("removeImgButton");
+    QPushButton* bucketButton = findChild<QPushButton*>("bucketButton");
 
 
     if (!canvas || !figureInfoLabel || !thicknessSpinBox || !colorButton ||
-        !colorLabel || !thicknessLabel || !fillColorLabel || !fillColorButton || !clearColorButton || !selectImgButton || !removeImgButton) {
-        qDebug() << "Error: Required widgets not found in UI!";
-        return;
+        !colorLabel || !thicknessLabel || !fillColorLabel || !fillColorButton || !clearColorButton || !selectImgButton || !removeImgButton || !bucketButton) {
+        qDebug() << "Error: Required widgets not found in UI (ensure bucketButton is present)!";
     }
 
+    // Initialize tools
+    pointerTool = new Pointer(canvas);
+    lineTool = new LineTool();
+    polygonTool = new PolygonTool();
+    circleTool = new CircleTool();
+    rectangleTool = new RectangleTool();
+    clippingTool = new ClippingTool(canvas, canvas->clippingManager);
+    bucketTool = new BucketTool(canvas); // Initialize BucketTool with canvas
+
+    // Initial UI state
+    figureInfoLabel->setVisible(true);
     thicknessSpinBox->setVisible(false);
     colorButton->setVisible(false);
     colorLabel->setVisible(false);
@@ -61,6 +72,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(findChild<QPushButton*>("circleButton"), &QPushButton::clicked, this, &MainWindow::onCircleButtonClicked);
     connect(findChild<QPushButton*>("rectangleButton"), &QPushButton::clicked, this, &MainWindow::onRectangleButtonClicked);
     connect(findChild<QPushButton*>("cliperkaButton"), &QPushButton::clicked, this, &MainWindow::onCliperkaButtonClicked);
+    connect(bucketButton, &QPushButton::clicked, this, &MainWindow::onBucketButtonClicked);
+
 
 
     connect(findChild<QAction*>("actionClear"), &QAction::triggered, this, [this]() {
@@ -98,14 +111,20 @@ MainWindow::MainWindow(QWidget *parent)
         [this, figureInfoLabel, thicknessSpinBox, colorButton,
          colorLabel, thicknessLabel, fillColorButton, fillColorLabel, clearColorButton, selectImgButton, removeImgButton]
         (const QColor& borderColor, const QColor& fillColor, int thickness) {
-        // Update UI elements when a figure is selected
+        // This slot is for when a figure is selected by the Pointer tool
+        if (currentTool != pointerTool) return;
+
         statusBar()->showMessage(QString("Selected Figure - Border: %1, Fill: %2, Thickness: %3")
                              .arg(borderColor.name()).arg(fillColor.name()).arg(thickness));
         figureInfoLabel->setVisible(false);
         colorButton->setStyleSheet(QString("background-color: %1;").arg(borderColor.name()));
         colorButton->setVisible(true);
         colorLabel->setVisible(true);
-        fillColorButton->setStyleSheet(QString("background-color: %1;").arg(fillColor.name()));
+        if (fillColor.isValid()) {
+            fillColorButton->setStyleSheet(QString("background-color: %1;").arg(fillColor.name()));
+        } else {
+            fillColorButton->setStyleSheet("background-color: none;");
+        }
         fillColorButton->setVisible(true);
         fillColorLabel->setVisible(true);
         thicknessSpinBox->setVisible(true);
@@ -118,10 +137,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(canvas, &Canvas::figureDeselected, this,
         [this, figureInfoLabel, thicknessSpinBox, colorButton,
          colorLabel, thicknessLabel, fillColorButton, fillColorLabel, clearColorButton, selectImgButton, removeImgButton]() {
-        // Reset UI elements when no figure is selected
+        // This slot is for when a figure is deselected by the Pointer tool
+        if (currentTool != pointerTool) return;
+
         statusBar()->clearMessage();
-        canvas->selectFigure(nullptr);
+        // canvas->selectFigure(nullptr); // Already handled by Pointer tool or setCurrentTool
         figureInfoLabel->setVisible(true);
+        figureInfoLabel->setText("No figure selected.");
         colorButton->setVisible(false);
         colorLabel->setVisible(false);
         fillColorButton->setVisible(false);
@@ -133,33 +155,39 @@ MainWindow::MainWindow(QWidget *parent)
         removeImgButton->setVisible(false);
     });
     connect(thicknessSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
-        if (canvas->selectedFigure != nullptr) {
+        if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
             qDebug() << "Changing thickness of selected figure to" << value;
             canvas->selectedFigure->setThickness(value);
             canvas->update(); // Repaint the canvas
         } else {
-            qDebug() << "No figure selected while adjusting thickness.";
+            qDebug() << "No figure selected or pointer tool not active while adjusting thickness.";
         }
     });
 
-    connect(colorButton, &QPushButton::clicked, this, [this, colorButton]() {
-        if (canvas->selectedFigure != nullptr) {
-            QColor selectedColor = QColorDialog::getColor(canvas->selectedFigure->getBorderColor(), this, "Select Color");
+    connect(colorButton, &QPushButton::clicked, this, [this, colorButton]() { // Border color button
+        if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
+            QColor selectedColor = QColorDialog::getColor(canvas->selectedFigure->getBorderColor(), this, "Select Border Color");
             if (selectedColor.isValid()) {
-                qDebug() << "Changing color of selected figure to" << selectedColor.name();
+                qDebug() << "Changing border color of selected figure to" << selectedColor.name();
                 canvas->selectedFigure->setBorderColor(selectedColor);
                 colorButton->setStyleSheet(QString("background-color: %1;").arg(selectedColor.name()));
                 canvas->update(); // Repaint the canvas
             }
         } else {
-            qDebug() << "No figure selected while changing color.";
+            qDebug() << "No figure selected or pointer tool not active while changing border color.";
         }
     });
 
-    connect(fillColorButton, &QPushButton::clicked, this, [this, fillColorButton]() {
-        if (canvas->selectedFigure != nullptr) {
+    connect(fillColorButton, &QPushButton::clicked, this, [this, fillColorButton]() { // Fill color button
+        if (currentTool == bucketTool) {
+            QColor selectedColor = QColorDialog::getColor(bucketTool->getFillColor(), this, "Select Bucket Fill Color");
+            if (selectedColor.isValid()) {
+                bucketTool->setFillColor(selectedColor);
+                fillColorButton->setStyleSheet(QString("background-color: %1;").arg(selectedColor.name()));
+            }
+        } else if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
             QColor selectedColor = QColorDialog::getColor(canvas->selectedFigure->getFillColor(),
-                                                       this, "Select Fill Color");
+                                                       this, "Select Figure Fill Color");
             if (selectedColor.isValid()) {
                 qDebug() << "Changing fill color of selected figure to" << selectedColor.name();
                 canvas->selectedFigure->setFillColor(selectedColor);
@@ -167,47 +195,59 @@ MainWindow::MainWindow(QWidget *parent)
                 canvas->update(); // Repaint the canvas
             }
         } else {
-            qDebug() << "No figure selected while changing fill color.";
+            qDebug() << "No figure selected (for pointer) or bucket tool not active while changing fill color.";
         }
     });
 
-    connect(clearColorButton, &QPushButton::clicked, this, [this, clearColorButton]() {
-        if (canvas->selectedFigure != nullptr) {
-            canvas->selectedFigure->setFillColor(nullptr);
+    connect(clearColorButton, &QPushButton::clicked, this, [this, fillColorButton]() {
+        if (currentTool == bucketTool) {
+            bucketTool->setFillColor(Qt::black); // Default to black, and clear texture
+            bucketTool->setFillTexture(nullptr);
+            fillColorButton->setStyleSheet(QString("background-color: %1;").arg(QColor(Qt::black).name()));
+        } else if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
+            canvas->selectedFigure->setFillColor(QColor()); // Set to invalid color (no fill)
+            canvas->selectedFigure->removeTexture(); // Also remove texture
+            fillColorButton->setStyleSheet("background-color: none;");
             canvas->update();
         }
     });
 
-    connect(selectImgButton, &QPushButton::clicked, this, [this, selectImgButton]() {
-        if (canvas->selectedFigure != nullptr) {
-            QString selectedTexturePath= QFileDialog::getOpenFileName(
-                            this,
-                            "Select Texture Image",
-                            "",
-                            "Images (*.png *.jpg *.jpeg *.bmp *.gif)"
-                        );
-            if (!selectedTexturePath.isEmpty()) {
-                qDebug() << "Selected texture path:" << selectedTexturePath;
+    connect(selectImgButton, &QPushButton::clicked, this, [this]() {
+        QString selectedTexturePath = QFileDialog::getOpenFileName(
+                        this,
+                        "Select Texture Image",
+                        "",
+                        "Images (*.png *.jpg *.jpeg *.bmp *.gif)"
+                    );
+        if (!selectedTexturePath.isEmpty()) {
+            if (currentTool == bucketTool) {
+                bucketToolTexture.load(selectedTexturePath);
+                if (!bucketToolTexture.isNull()) {
+                    bucketTool->setFillTexture(&bucketToolTexture);
+                    qDebug() << "Bucket tool texture set to:" << selectedTexturePath;
+                } else {
+                    qDebug() << "Failed to load texture for bucket tool:" << selectedTexturePath;
+                    bucketTool->setFillTexture(nullptr); // Fallback
+                }
+            } else if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
+                qDebug() << "Selected texture path for figure:" << selectedTexturePath;
                 canvas->selectedFigure->setTexturePath(selectedTexturePath);
                 canvas->update();
             }
         }
     });
 
-    connect(removeImgButton, &QPushButton::clicked, this, [this, removeImgButton]() {
-        if (canvas->selectedFigure != nullptr) {
+    connect(removeImgButton, &QPushButton::clicked, this, [this]() {
+        if (currentTool == bucketTool) {
+            bucketTool->setFillTexture(nullptr); // Clears texture, bucket tool reverts to color fill
+            qDebug() << "Bucket tool texture removed.";
+        } else if (currentTool == pointerTool && canvas->selectedFigure != nullptr) {
             canvas->selectedFigure->removeTexture();
             canvas->update();
         }
     });
 
-    pointerTool = new Pointer(canvas);
-    lineTool = new LineTool();
-    polygonTool = new PolygonTool();
-    circleTool = new CircleTool();
-    rectangleTool = new RectangleTool();
-    clippingTool = new ClippingTool(canvas, canvas->clippingManager);
-    setCurrentTool(pointerTool);
+    setCurrentTool(pointerTool); // Set pointer as default tool
 }
 
 MainWindow::~MainWindow()
@@ -218,6 +258,8 @@ MainWindow::~MainWindow()
     delete polygonTool;
     delete circleTool;
     delete rectangleTool;
+    delete clippingTool;
+    delete bucketTool;
 }
 
 void MainWindow::onPointerButtonClicked()
@@ -232,31 +274,82 @@ void MainWindow::onLineButtonClicked()
 
 void MainWindow::onPolygonButtonClicked()
 {
-    // Placeholder for Polygon tool logic
     setCurrentTool(polygonTool);
 }
 
 void MainWindow::onCircleButtonClicked()
 {
-    // Placeholder for Circle tool logic
     setCurrentTool(circleTool);
 }
 
 void MainWindow::onRectangleButtonClicked()
 {
-    // Set the current tool to Rectangle
     setCurrentTool(rectangleTool);
 }
 
 void MainWindow::onCliperkaButtonClicked() {
-    // Set the current tool to clipping tool
     setCurrentTool(clippingTool);
+}
+
+void MainWindow::onBucketButtonClicked()
+{
+    setCurrentTool(bucketTool);
 }
 
 void MainWindow::setCurrentTool(Tool* tool)
 {
     currentTool = tool;
-    canvas->setCurrentTool(tool); // Ensure the canvas is aware of the current tool
+    canvas->setCurrentTool(tool);
     qDebug() << "Current tool set to:" << QString::fromStdString(tool->name());
     statusBar()->showMessage(QString("Current tool: ") + QString::fromStdString(tool->name()));
+
+    // Get UI elements - ensure they are consistently named and available
+    QLabel* figureInfoLabel = findChild<QLabel*>("figureInfoLabel");
+    QSpinBox* thicknessSpinBox = findChild<QSpinBox*>("thicknessSpinBox");
+    QLabel* colorLabel = findChild<QLabel*>("colorLabel"); // Border color label
+    QLabel* thicknessLabel = findChild<QLabel*>("thicknessLabel");
+    QPushButton* borderColorButton = findChild<QPushButton*>("colorButton"); // Border color button
+    QLabel* fillColorLabelWidget = findChild<QLabel*>("fillColorLabel");
+    QPushButton* fillColorButtonWidget = findChild<QPushButton*>("fillColorButton");
+    QPushButton* clearColorButtonWidget = findChild<QPushButton*>("clearColorButton");
+    QPushButton* selectImgButtonWidget = findChild<QPushButton*>("selectImgButton");
+    QPushButton* removeImgButtonWidget = findChild<QPushButton*>("removeImgButton");
+
+    // Default: hide all figure-specific controls
+    if (figureInfoLabel) figureInfoLabel->setVisible(true);
+    if (thicknessSpinBox) thicknessSpinBox->setVisible(false);
+    if (borderColorButton) borderColorButton->setVisible(false);
+    if (colorLabel) colorLabel->setVisible(false);
+    if (thicknessLabel) thicknessLabel->setVisible(false);
+    if (fillColorButtonWidget) fillColorButtonWidget->setVisible(false);
+    if (fillColorLabelWidget) fillColorLabelWidget->setVisible(false);
+    if (clearColorButtonWidget) clearColorButtonWidget->setVisible(false);
+    if (selectImgButtonWidget) selectImgButtonWidget->setVisible(false);
+    if (removeImgButtonWidget) removeImgButtonWidget->setVisible(false);
+
+
+    if (tool == pointerTool) {
+        if (figureInfoLabel) figureInfoLabel->setText("Select a figure or a point.");
+        // Visibility of controls for pointer tool is handled by figureSelected/Deselected signals
+        // If a figure is already selected, its info should be shown.
+        // We might need to explicitly call a refresh here if canvas->selectedFigure exists.
+        if (canvas->selectedFigure) {
+             emit canvas->figureSelected(canvas->selectedFigure->getBorderColor(), canvas->selectedFigure->getFillColor(), canvas->selectedFigure->getThickness());
+        } else {
+             emit canvas->figureDeselected();
+        }
+    } else if (tool == bucketTool) {
+        if (figureInfoLabel) figureInfoLabel->setText("Click to fill area.");
+        if (fillColorButtonWidget) {
+            fillColorButtonWidget->setVisible(true);
+            fillColorButtonWidget->setStyleSheet(QString("background-color: %1;").arg(bucketTool->getFillColor().name()));
+        }
+        if (fillColorLabelWidget) fillColorLabelWidget->setVisible(true);
+        if (clearColorButtonWidget) clearColorButtonWidget->setVisible(true);
+        if (selectImgButtonWidget) selectImgButtonWidget->setVisible(true);
+        if (removeImgButtonWidget) removeImgButtonWidget->setVisible(true);
+    } else { // For other drawing tools
+        if (figureInfoLabel) figureInfoLabel->setText(QString("Drawing %1").arg(QString::fromStdString(tool->name())));
+        // All figure modification controls remain hidden
+    }
 }

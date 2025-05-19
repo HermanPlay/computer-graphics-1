@@ -82,13 +82,13 @@ void Pill::draw(QPainter& painter) {
 
     Line line1(rectStart1, rectEnd1);
     line1.setAntiAliasing(isAntiAliasingEnabled());
-    line1.setColor(color);
+    line1.setBorderColor(color);
     line1.setThickness(thickness);
     line1.draw(painter);
 
     Line line2(rectStart2, rectEnd2);
     line2.setAntiAliasing(isAntiAliasingEnabled());
-    line2.setColor(color);
+    line2.setBorderColor(color);
     line2.setThickness(thickness);
     line2.draw(painter);
 }

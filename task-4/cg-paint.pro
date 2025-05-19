@@ -23,7 +23,8 @@ SOURCES += \
     rectangle.cpp \
     rectangleTool.cpp \
     clippingManager.cpp \
-    clippingTool.cpp
+    clippingTool.cpp \
+    bucketTool.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -39,7 +40,8 @@ HEADERS += \
     rectangle.h \
     rectangleTool.h \
     clippingManager.h \
-    clippingTool.h
+    clippingTool.h \
+    bucketTool.h
 
 FORMS += \
     mainwindow.ui

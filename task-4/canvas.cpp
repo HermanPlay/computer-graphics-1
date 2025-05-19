@@ -1,4 +1,5 @@
 #include "canvas.h"
+#include "bucketTool.h"
 #include "clippingManager.h"
 #include "figure.h"
 #include "qevent.h"
@@ -27,7 +28,8 @@ void Canvas::setCurrentTool(Tool *tool)
 void Canvas::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
-    QPainter painter(this);
+    QImage image(this->width(), this->height(), QImage::Format_ARGB32);
+    QPainter painter(&image);
     painter.setBrush(Qt::white);
     painter.drawRect(0, 0, this->width(), this->height());
 
@@ -40,6 +42,13 @@ void Canvas::paintEvent(QPaintEvent *event)
         currentTool->draw(painter);
     }
     clippingManager->drawClippedSegments(painter);
+
+    // BucketTool* tool = dynamic_cast<BucketTool*>(currentTool);
+    // if (tool) {
+    //     tool->fill(painter);
+    // }
+    QPainter canvasPainter(this);
+    canvasPainter.drawImage(0, 0, image);
 }
 
 void Canvas::mousePressEvent(QMouseEvent *event)
