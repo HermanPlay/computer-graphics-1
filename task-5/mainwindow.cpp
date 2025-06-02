@@ -1,61 +1,94 @@
 #include "mainwindow.h"
+#include "rasterizer.h"
+#include "scene.h"
 #include "ui_mainwindow.h"
-#include "cube.h"
 #include <QVBoxLayout> // For layout
-#include <QSlider>    // For sliders
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
-{
+    : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
 
-    // It's better to create the Cube widget here and add it to a layout
-    cube = new Cube(this); // Create the Cube widget
+    // Set up status bar
+    mousePositionLabel = new QLabel("Mouse: (0, 0)");
+    statusBar()->addWidget(mousePositionLabel);
 
-    QSlider *xSlider = new QSlider(Qt::Horizontal, this);
-    xSlider->setRange(-360, 360);
-    xSlider->setValue(0);
-    xSlider->setTickInterval(1);
-    connect(xSlider, &QSlider::valueChanged, this, &MainWindow::on_xRotationSlider_valueChanged);
+    // Scene setup
+    Scene *scene = new Scene();
+    scene->readFromObjFile(
+        ":/assets/models/cube.obj"); // Load cube model from OBJ file
+    scene->readFromObjFile(":/assets/models/cube2.obj");
+    QImage *targetImage =
+        new QImage(this->width(), this->height(), QImage::Format_ARGB32);
+    rasterizer = new Rasterizer(targetImage, scene);
+    rasterizer->renderScene();
 
-    QSlider *ySlider = new QSlider(Qt::Horizontal, this);
-    ySlider->setRange(-360, 360);
-    ySlider->setValue(0);
-    ySlider->setTickInterval(1);
-    connect(ySlider, &QSlider::valueChanged, this, &MainWindow::on_yRotationSlider_valueChanged);
+    // Set size policies to make rasterizer expand to fill all available space
+    rasterizer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    rasterizer->setMinimumSize(1, 1);
 
-    // Layout to arrange cube and sliders
-    QVBoxLayout *layout = new QVBoxLayout;
-    layout->addWidget(cube);
-    layout->addWidget(xSlider);
-    layout->addWidget(ySlider);
+    // Connect mouse position signal
+    connect(rasterizer, &Rasterizer::mousePositionChanged, this,
+            &MainWindow::updateMousePosition);
 
-    // Set the layout on the central widget
-    QWidget *centralWidget = new QWidget(this);
-    centralWidget->setLayout(layout);
-    setCentralWidget(centralWidget);
-
-    // cube->setMinimumSize(200, 200); cube->setMaximumSize(400, 400); cube->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
+    // Set the rasterizer directly as the central widget to eliminate all
+    // margins
+    setCentralWidget(rasterizer);
 }
 
-MainWindow::~MainWindow()
-{
+MainWindow::~MainWindow() {
     delete ui;
-    // No need to delete cube if it's a child of MainWindow and layout takes ownership
+    // No need to delete cube if it's a child of MainWindow and layout takes
+    // ownership
 }
 
-void MainWindow::on_xRotationSlider_valueChanged(int value)
-{
-    if(cube) {
-        cube->rotateX(value);
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+    const int step = 10;             // Step size for camera movement
+    const float rotationStep = 5.0f; // Rotation step in degrees
+
+    bool shiftPressed = event->modifiers() & Qt::ShiftModifier;
+
+    switch (event->key()) {
+    case Qt::Key_W:
+        if (shiftPressed) {
+            // Rotate camera up (pitch up)
+            rasterizer->RotateCamera(0, rotationStep);
+        } else {
+            // Move camera forward
+            rasterizer->TranslateCamera(QVector3D(0, 0, step));
+        }
+        break;
+    case Qt::Key_S:
+        if (shiftPressed) {
+            // Rotate camera down (pitch down)
+            rasterizer->RotateCamera(0, -rotationStep);
+        } else {
+            // Move camera backward
+            rasterizer->TranslateCamera(QVector3D(0, 0, -step));
+        }
+        break;
+    case Qt::Key_A:
+        if (shiftPressed) {
+            // Rotate camera left (yaw left)
+            rasterizer->RotateCamera(-rotationStep, 0);
+        } else {
+            // Move camera left
+            rasterizer->TranslateCamera(QVector3D(-step, 0, 0));
+        }
+        break;
+    case Qt::Key_D:
+        if (shiftPressed) {
+            // Rotate camera right (yaw right)
+            rasterizer->RotateCamera(rotationStep, 0);
+        } else {
+            // Move camera right
+            rasterizer->TranslateCamera(QVector3D(step, 0, 0));
+        }
+        break;
+    default:
+        QMainWindow::keyPressEvent(event);
     }
 }
 
-void MainWindow::on_yRotationSlider_valueChanged(int value)
-{
-    if(cube) {
-        cube->rotateY(value);
-    }
+void MainWindow::updateMousePosition(int x, int y) {
+    mousePositionLabel->setText(QString("Mouse: (%1, %2)").arg(x).arg(y));
 }

@@ -11,14 +11,18 @@ CONFIG += c++17
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    cube.cpp
 
 HEADERS += \
     mainwindow.h \
-    cube.h
+    scene.h \ 
+    rasterizer.h \ 
+    camera.h
 
 FORMS += \
     mainwindow.ui
+
+RESOURCES += \
+    resources.qrc
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

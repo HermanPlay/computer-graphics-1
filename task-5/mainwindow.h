@@ -1,9 +1,10 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "rasterizer.h"
 #include <QMainWindow>
-#include "cube.h"
-#include <QSlider> // Add QSlider include
+#include <QStatusBar>
+#include <QLabel>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -18,14 +19,15 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    Cube *cube; // Make sure this is accessible, or pass slider values to it
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
 
-private slots: // Add private slots for slider value changes
-    void on_xRotationSlider_valueChanged(int value);
-    void on_yRotationSlider_valueChanged(int value);
+public slots:
+    void updateMousePosition(int x, int y);
 
 private:
     Ui::MainWindow *ui;
-    // Cube *cubeWidget; // If you instantiate Cube in the .cpp and add to layout
+    QLabel *mousePositionLabel;
+    Rasterizer *rasterizer; 
 };
 #endif // MAINWINDOW_H
