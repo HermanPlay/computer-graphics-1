@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 class Rasterizer : public QWidget {
     Q_OBJECT
@@ -84,8 +85,17 @@ class Rasterizer : public QWidget {
                     // points[i]; qDebug() << "  Point 2:" << points[i + 1];
                     // qDebug() << "  Point 3:" << points[i + 2];
 
-                    fillTriangleWithDepth(points[i], points[i + 1],
-                                          points[i + 2], triangleColor.name());
+                    // fillTriangleWithDepth(points[i], points[i + 1],
+                    //                       points[i + 2], triangleColor.name());
+
+
+                    // Convert to screen space first
+                    QVector3D p1 = PointToScreen(points[i]);
+                    QVector3D p2 = PointToScreen(points[i + 1]);
+                    QVector3D p3 = PointToScreen(points[i + 2]);
+
+                    fillTriangleScanLine(p1, p2, p3, triangleColor);
+
 
                     triangleCount++;
                 }
@@ -227,6 +237,130 @@ class Rasterizer : public QWidget {
             }
         }
     }
+
+    void fillTriangleScanLine(const QVector3D &v1, const QVector3D &v2, const QVector3D &v3, QColor fillColor) {
+        if (!target || target->isNull()) {
+            qWarning() << "Target image is invalid in fillTriangleScanLine";
+            return;
+        }
+
+        qDebug() << "Triangle vertices:" << v1 << v2 << v3;
+
+        // Build edge table for triangle (all 3 edges)
+        struct Edge {
+            double x_start, z_start;
+            double dx_dy, dz_dy;
+            int ymin, ymax;
+
+            Edge(const QVector3D& p1, const QVector3D& p2) {
+                // Ensure p1 is the lower point (smaller y)
+                QVector3D lower = (p1.y() <= p2.y()) ? p1 : p2;
+                QVector3D upper = (p1.y() <= p2.y()) ? p2 : p1;
+                
+                x_start = lower.x();
+                z_start = lower.z();
+                ymin = (int)ceil(lower.y());
+                ymax = (int)floor(upper.y());
+                
+                double dy = upper.y() - lower.y();
+                if (dy != 0) {
+                    dx_dy = (upper.x() - lower.x()) / dy;
+                    dz_dy = (upper.z() - lower.z()) / dy;
+                } else {
+                    dx_dy = 0;
+                    dz_dy = 0;
+                }
+                
+                qDebug() << "Edge from" << lower << "to" << upper 
+                         << "ymin:" << ymin << "ymax:" << ymax
+                         << "dx_dy:" << dx_dy << "dz_dy:" << dz_dy;
+            }
+
+            std::pair<double, double> getIntersection(int y) const {
+                double x = x_start + dx_dy * (y - ymin + 0.5); // Add 0.5 for pixel center
+                double z = z_start + dz_dy * (y - ymin + 0.5);
+                return {x, z};
+            }
+        };
+
+        // Create all three edges of the triangle
+        std::vector<Edge> edges;
+        
+        // Only add non-horizontal edges
+        if (abs(v1.y() - v2.y()) > 0.01) {
+            edges.emplace_back(v1, v2);
+        }
+        if (abs(v2.y() - v3.y()) > 0.01) {
+            edges.emplace_back(v2, v3);
+        }
+        if (abs(v3.y() - v1.y()) > 0.01) {
+            edges.emplace_back(v3, v1);
+        }
+
+        if (edges.empty()) {
+            qDebug() << "No valid edges, triangle is degenerate or horizontal";
+            return;
+        }
+
+        // Find Y range
+        int ymin = (int)ceil(std::min({v1.y(), v2.y(), v3.y()}));
+        int ymax = (int)floor(std::max({v1.y(), v2.y(), v3.y()}));
+        
+        // qDebug() << "Y range:" << ymin << "to" << ymax << "Total edges:" << edges.size();
+
+        // Process each scanline
+        for (int y = ymin; y <= ymax; ++y) {
+            if (y < 0 || y >= target->height()) continue;
+
+            std::vector<std::pair<double, double>> intersections; // x, z pairs
+
+            for (const auto& edge : edges) {
+                if (y >= edge.ymin && y <= edge.ymax) {
+                    auto intersection = edge.getIntersection(y);
+                    intersections.push_back(intersection);
+                    // qDebug() << "Y=" << y << "edge intersection at x=" << intersection.first << "z=" << intersection.second;
+                }
+            }
+
+            // qDebug() << "Y=" << y << "total intersections:" << intersections.size();
+
+            if (intersections.size() >= 2) {
+                // Sort intersections by X
+                std::sort(intersections.begin(), intersections.end());
+
+                // Fill between pairs of intersections
+                for (size_t i = 0; i + 1 < intersections.size(); i += 2) {
+                    int x1 = (int)round(intersections[i].first);
+                    int x2 = (int)round(intersections[i + 1].first);
+                    double z1 = intersections[i].second;
+                    double z2 = intersections[i + 1].second;
+
+                    if (x1 > x2) {
+                        std::swap(x1, x2);
+                        std::swap(z1, z2);
+                    }
+
+                    x1 = std::max(0, x1);
+                    x2 = std::min(target->width() - 1, x2);
+
+                    // qDebug() << "Filling scanline y=" << y << "from x=" << x1 << "to x=" << x2;
+
+                    for (int x = x1; x <= x2; ++x) {
+                        double t = (x2 == x1) ? 0.0 : (double)(x - x1) / (x2 - x1);
+                        double z = z1 + t * (z2 - z1);
+
+                        // Z-buffer test
+                        if (z > 0.0 && z < zBuffer[y][x]) {
+                            zBuffer[y][x] = z;
+                            target->setPixelColor(x, y, fillColor);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
 
     QVector3D PointToScreen(const QVector3D &point) {
         if (!target || target->isNull()) {

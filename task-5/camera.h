@@ -18,18 +18,52 @@ public:
     }
 
     void Translate(const QVector3D& translationVector) {
-        position += translationVector; 
-        translation.translate(translationVector);
+        position += translationVector;
+        
+        // Translation matrix format:
+        // [1  0  0  tx]
+        // [0  1  0  ty]
+        // [0  0  1  tz]
+        // [0  0  0  1 ]
+        translation(0, 3) += translationVector.x();
+        translation(1, 3) += translationVector.y();
+        translation(2, 3) += translationVector.z();
     }
 
     void Rotate(float yaw, float pitch) {
         rotationAngles.setX(rotationAngles.x() + yaw);   // Yaw (Y-axis rotation)
         rotationAngles.setY(rotationAngles.y() + pitch); // Pitch (X-axis rotation)
         
-        // Rebuild rotation matrix from euler angles
+        // Convert degrees to radians
+        float yawRad = qDegreesToRadians(rotationAngles.x());
+        float pitchRad = qDegreesToRadians(rotationAngles.y());
+        
+        float cosYaw = cos(yawRad);
+        float sinYaw = sin(yawRad);
+        
+        float cosPitch = cos(pitchRad);
+        float sinPitch = sin(pitchRad);
+        
         rotation.setToIdentity();
-        rotation.rotate(rotationAngles.x(), QVector3D(0, 1, 0)); // Yaw around Y
-        rotation.rotate(rotationAngles.y(), QVector3D(1, 0, 0)); // Pitch around X
+        rotation(0, 0) = cosYaw;
+        rotation(0, 1) = sinYaw * sinPitch;
+        rotation(0, 2) = sinYaw * cosPitch;
+        rotation(0, 3) = 0.0f;
+        
+        rotation(1, 0) = 0.0f;
+        rotation(1, 1) = cosPitch;
+        rotation(1, 2) = -sinPitch;
+        rotation(1, 3) = 0.0f;
+        
+        rotation(2, 0) = -sinYaw;
+        rotation(2, 1) = cosYaw * sinPitch;
+        rotation(2, 2) = cosYaw * cosPitch;
+        rotation(2, 3) = 0.0f;
+        
+        rotation(3, 0) = 0.0f;
+        rotation(3, 1) = 0.0f;
+        rotation(3, 2) = 0.0f;
+        rotation(3, 3) = 1.0f;
     }
 
     void RotateYaw(float degrees) {
